@@ -249,9 +249,9 @@ def generate_map(width_tiles, height_tiles):
     game_map = np.ones((height_tiles, width_tiles), dtype=int) * TILE_WALL
 
     stack = []
-    start_x, start_y = random.randrange(1, width_tiles - 1, 2), random.randrange(1, height_tiles - 1, 2)
-    game_map[start_y, start_x] = TILE_EMPTY
-    stack.append(((start_x, start_y), (start_x, start_y)))
+    start_x_gen, start_y_gen = random.randrange(1, width_tiles - 1, 2), random.randrange(1, height_tiles - 1, 2)
+    game_map[start_y_gen, start_x_gen] = TILE_EMPTY
+    stack.append(((start_x_gen, start_y_gen), (start_x_gen, start_y_gen)))
 
     while stack:
         (cx, cy), (px, py) = stack.pop()
@@ -269,14 +269,6 @@ def generate_map(width_tiles, height_tiles):
         random.shuffle(neighbors)
         stack.extend(neighbors)
 
-    for y in range(1, height_tiles - 1):
-        for x in range(1, width_tiles - 1):
-            if game_map[y, x] == TILE_EMPTY:
-                if random.random() < 0.3:
-                    game_map[y, x] = TILE_BREAKABLE
-                elif random.random() < 0.05:
-                    game_map[y, x] = TILE_COLLECTIBLE
-
     empty_positions = [(x, y) for y in range(height_tiles) for x in range(width_tiles) if game_map[y, x] == TILE_EMPTY]
 
     if not empty_positions:
@@ -286,10 +278,60 @@ def generate_map(width_tiles, height_tiles):
 
     start_pos = random.choice(empty_positions)
     game_map[start_pos[1], start_pos[0]] = TILE_PLAYER_START
-    empty_positions.remove(start_pos)
+    # empty_positions.remove(start_pos) # Odstraníme až po vyčištění oblasti kolem hráče
 
-    exit_pos = random.choice(empty_positions) if empty_positions else (1, 1)
+    # Vyčistíme 3x3 oblast kolem hráče od případných zdí/rozbitelných bloků
+    for dy_clean in [-1, 0, 1]:
+        for dx_clean in [-1, 0, 1]:
+            cx, cy = start_pos[0] + dx_clean, start_pos[1] + dy_clean
+            if 0 <= cx < width_tiles and 0 <= cy < height_tiles:
+                if game_map[cy, cx] == TILE_WALL or game_map[cy, cx] == TILE_BREAKABLE:
+                    game_map[cy, cx] = TILE_EMPTY
+                    # Pokud se tato pozice stala prázdnou, přidáme ji do empty_positions, pokud tam ještě není
+                    if (cx, cy) not in empty_positions:
+                        empty_positions.append((cx, cy))
+
+    # Odebereme start_pos z empty_positions, aby se tam nescrolloval exit
+    if start_pos in empty_positions:
+        empty_positions.remove(start_pos)
+
+    # Vybereme exit pozici
+    exit_candidates = [p for p in empty_positions if p != start_pos and (
+                abs(p[0] - start_pos[0]) > width_tiles / 3 or abs(p[1] - start_pos[1]) > height_tiles / 3)]
+    if not exit_candidates:
+        exit_candidates = [p for p in empty_positions if p != start_pos]
+        if not exit_candidates:
+            # Krajní případ: jen startovní pozice zbývá, exit dáme vedle
+            exit_pos = (start_pos[0] + 1 if start_pos[0] + 1 < width_tiles else start_pos[0] - 1, start_pos[1])
+            if 0 <= exit_pos[0] < width_tiles and 0 <= exit_pos[1] < height_tiles:
+                if game_map[exit_pos[1], exit_pos[0]] != TILE_EMPTY:
+                    game_map[exit_pos[1], exit_pos[0]] = TILE_EMPTY
+            else:  # Fallback pokud ani vedle nelze
+                exit_pos = (random.randrange(1, width_tiles - 1), random.randrange(1, height_tiles - 1))
+                if game_map[exit_pos[1], exit_pos[0]] == TILE_WALL: game_map[exit_pos[1], exit_pos[0]] = TILE_EMPTY
+
+        else:
+            exit_pos = random.choice(exit_candidates)
+    else:
+        exit_pos = random.choice(exit_candidates)
+
     game_map[exit_pos[1], exit_pos[0]] = TILE_EXIT
+    if exit_pos in empty_positions: empty_positions.remove(exit_pos)
+
+    # Přidání rozbitelných bloků a sbíratelných předmětů
+    for y in range(1, height_tiles - 1):
+        for x in range(1, width_tiles - 1):
+            if game_map[y, x] == TILE_EMPTY and (x, y) != start_pos and (x, y) != exit_pos:
+                is_near_player = abs(x - start_pos[0]) <= 1 and abs(y - start_pos[1]) <= 1
+                is_near_exit = abs(x - exit_pos[0]) <= 1 and abs(y - exit_pos[1]) <= 1
+
+                if not is_near_player and not is_near_exit:
+                    if random.random() < 0.35:
+                        game_map[y, x] = TILE_BREAKABLE
+                    elif random.random() < 0.08:
+                        game_map[y, x] = TILE_COLLECTIBLE
+                elif game_map[y, x] == TILE_EMPTY and random.random() < 0.08:
+                    game_map[y, x] = TILE_COLLECTIBLE
 
     return game_map
 
@@ -324,7 +366,7 @@ def main():
     player_name_input = ""
     asking_for_name = False
 
-    remaining_time_seconds = 0  # <--- OPRAVENO: Inicializace zde
+    remaining_time_seconds = 0  # OPRAVENO: Inicializace zde
 
     # Tlačítka pro menu
     play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 40, 200, 70, "HRÁT", GAME_STATE_PLAYING)
@@ -362,7 +404,6 @@ def main():
         score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
         screen.blit(score_text, score_rect)
 
-        # Zobrazení času dokončení (s opravou logiky pro zobrazení, kdy se čas zaznamená)
         if finish_time > 0 and (player.lives > 0 and (finish_time - start_game_time) // 1000 < game_timer):
             time_taken = (finish_time - start_game_time) // 1000
             time_text = font.render(f"Čas dokončení: {time_taken}s", True, WHITE)
@@ -420,7 +461,7 @@ def main():
         finish_time = 0
         player_name_input = ""
         asking_for_name = False
-        remaining_time_seconds = game_timer  # Reset i zde, aby to bylo konzistentní
+        remaining_time_seconds = game_timer
         pygame.key.set_repeat(0)
 
         map_width_tiles = SCREEN_WIDTH // TILE_SIZE
@@ -536,7 +577,6 @@ def main():
         elif current_game_state == GAME_STATE_PLAYING:
             player.update(solid_walls, breakable_walls)
 
-            # Odpočet času
             elapsed_time_ms = pygame.time.get_ticks() - start_game_time
             remaining_time_seconds = game_timer - (elapsed_time_ms // 1000)
             if remaining_time_seconds < 0:
@@ -611,17 +651,15 @@ def main():
             demolition_charges.update()
             explosions.update()
 
-            # Kontrola konce hry (životy, čas, cíl) - konsolidovaná logika
             if player.lives <= 0 or remaining_time_seconds <= 0 or pygame.sprite.spritecollideany(player, exits):
-                if current_game_state == GAME_STATE_PLAYING:  # Zajistí, že se spustí jen jednou
+                if current_game_state == GAME_STATE_PLAYING:
                     current_game_state = GAME_STATE_GAME_OVER
-                    # Záznam času dokončení pouze, pokud je cíl dosažen A čas nevypršel A hráč má životy
                     if pygame.sprite.spritecollideany(player,
                                                       exits) and remaining_time_seconds > 0 and player.lives > 0:
                         finish_time = pygame.time.get_ticks()
                         asking_for_name = True
-                        pygame.key.set_repeat(500, 50)  # Povolí opakování kláves
-                    else:  # Jinak se jméno nezadává
+                        pygame.key.set_repeat(500, 50)
+                    else:
                         asking_for_name = False
                         pygame.key.set_repeat(0)
 
