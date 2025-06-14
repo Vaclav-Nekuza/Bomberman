@@ -1,16 +1,12 @@
 import pygame
 from config import TILE_SIZE, EXPLOSION_COLOR, ORANGE
 
-
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, x, y, explosion_duration, frame_duration):
         super().__init__()
-
-        # --- ZMĚNA ZDE: Načítání a příprava animace ---
-        # Obrázek je nyní ve STEJNÉ SLOŽCE jako tento soubor, takže stačí jen název souboru.
         try:
             self.spritesheet = pygame.image.load(
-                "entity/game_entity/explosion-sheet.png").convert_alpha()  # <--- OPRAVENÁ CESTA
+                "images/explosion-sheet.png").convert_alpha()
         except pygame.error as e:
             print(f"Chyba při načítání spritesheetu exploze: {e}. Používám fallback barvu.")
             self.image = pygame.Surface([TILE_SIZE, TILE_SIZE])
