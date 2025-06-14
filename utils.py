@@ -68,7 +68,7 @@ def generate_map(width_tiles, height_tiles):
         for dx_clean in [-1, 0, 1]:
             cx, cy = start_pos[0] + dx_clean, start_pos[1] + dy_clean
             if 0 <= cx < width_tiles and 0 <= cy < height_tiles:
-                if game_map[cy, cx] == TILE_WALL or game_map[cy, cx] == TILE_BREAKABLE:
+                if game_map[cy, cx] == TILE_BREAKABLE: # Odstraňujeme jen hnědé
                     game_map[cy, cx] = TILE_EMPTY
                     if (cx, cy) not in empty_positions:
                         empty_positions.append((cx, cy))
