@@ -3,8 +3,9 @@ import pygame
 # Importování všeho potřebného z našich modulů
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, TITLE, FPS, HUD_HEIGHT,
-    WHITE, BLACK, RED, GRAY, TILE_SIZE, GAME_STATE_INTRO, GAME_STATE_MENU, GAME_STATE_PLAYING,
-    GAME_STATE_GAME_OVER, GAME_STATE_HIGHSCORES,
+    WHITE, BLACK, GREEN, RED, BLUE, GRAY, BROWN, ORANGE, YELLOW, EXPLOSION_COLOR,
+    TILE_SIZE, GAME_STATE_INTRO, GAME_STATE_MENU, GAME_STATE_PLAYING,
+    GAME_STATE_GAME_OVER, GAME_STATE_HIGHSCORES, GAME_STATE_PAUSED,
     TILE_WALL, TILE_BREAKABLE, TILE_PLAYER_START, TILE_EXIT, TILE_COLLECTIBLE
 )
 from entity.game_entity.Collectible import Collectible
@@ -48,6 +49,7 @@ def main():
     asking_for_name = False
     
     remaining_time_seconds = 0
+    last_unpaused_time = pygame.time.get_ticks()
 
     # Tlačítka pro menu
     play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 40, 200, 70, "HRÁT", GAME_STATE_PLAYING)
@@ -57,6 +59,11 @@ def main():
     # Tlačítka pro obrazovku GAME OVER
     restart_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 100, 200, 70, "RESTART", GAME_STATE_PLAYING, font_size=50) 
     menu_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 180, 200, 70, "MENU", GAME_STATE_MENU, font_size=50)
+
+    # Tlačítka pro PAUSE menu
+    resume_button_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 - 40, 350, 70, "POKRAČOVAT", GAME_STATE_PLAYING, font_size=50)
+    restart_game_pause = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 40, 200, 70, "RESTART", GAME_STATE_PLAYING, font_size=50)
+    quit_game_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 + 120, 350, 70, "UKONČIT HRU", GAME_STATE_MENU, font_size=50)
 
     def draw_intro_screen():
         screen.fill(BLACK)
@@ -131,9 +138,28 @@ def main():
         back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         screen.blit(back_text, back_rect)
 
+    def draw_paused_screen(): # NOVÁ FUNKCE PRO PAUZU
+        # Zatemnění obrazovky - nejprve vykreslíme celou hru (což je uděláno před voláním draw_paused_screen),
+        # a pak přes ní nakreslíme průhlednou vrstvu.
+        s = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        s.fill((0,0,0,128)) # Černá s 128 průhledností (z 255)
+        screen.blit(s, (0,0))
+
+        pause_text = font.render("PAUZA", True, WHITE)
+        pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        screen.blit(pause_text, pause_rect)
+
+        # Vykreslení tlačítek pauzy
+        resume_button_pause.draw(screen)
+        restart_game_pause.draw(screen)
+        quit_game_pause.draw(screen)
+
+    # ... (Zde budou pokračovat definice funkcí, nebo hlavní herní smyčka) ...
+    running = True # To je jen orientační, že začíná hlavní smyčka
+
 
     def initialize_game_level():
-        nonlocal player, score, game_timer, start_game_time, finish_time, message, message_timer, player_name_input, asking_for_name, remaining_time_seconds
+        nonlocal player, score, game_timer, start_game_time, finish_time, message, message_timer, player_name_input, asking_for_name, remaining_time_seconds, last_unpaused_time
         all_sprites.empty()
         solid_walls.empty()
         breakable_walls.empty()
@@ -154,6 +180,8 @@ def main():
         map_width_tiles = SCREEN_WIDTH // TILE_SIZE
         map_height_tiles = (SCREEN_HEIGHT - HUD_HEIGHT) // TILE_SIZE
         game_map_array = generate_map(map_width_tiles, map_height_tiles)
+        start_game_time = pygame.time.get_ticks()
+        last_unpaused_time = pygame.time.get_ticks()
 
         player_start_pos = (0, 0)
 
@@ -208,7 +236,8 @@ def main():
             elif current_game_state == GAME_STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
-                        running = False
+                        current_game_state = GAME_STATE_PAUSED
+                        last_unpaused_time = pygame.time.get_ticks()
                     if event.key == pygame.K_SPACE:
                         charge_x = (player.rect.x + TILE_SIZE // 2) // TILE_SIZE * TILE_SIZE
                         charge_y = (player.rect.y + TILE_SIZE // 2 - HUD_HEIGHT) // TILE_SIZE * TILE_SIZE
@@ -263,7 +292,25 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         current_game_state = GAME_STATE_MENU
+            elif current_game_state == GAME_STATE_PAUSED: # Obsluha událostí pro PAUZA menu
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        current_game_state = GAME_STATE_PLAYING
+                        start_game_time += (pygame.time.get_ticks() - last_unpaused_time)
+                # Obsluha tlačítek v pauze
+                action_resume = resume_button_pause.handle_event(event)
+                if action_resume == GAME_STATE_PLAYING:
+                    current_game_state = action_resume
+                    start_game_time += (pygame.time.get_ticks() - last_unpaused_time)
 
+                action_restart_pause = restart_game_pause.handle_event(event)
+                if action_restart_pause == GAME_STATE_PLAYING:
+                    current_game_state = action_restart_pause
+                    initialize_game_level()  # Inicializuje novou hru
+
+                action_quit_game = quit_game_pause.handle_event(event)
+                if action_quit_game == GAME_STATE_MENU:
+                    current_game_state = action_quit_game
         # --- Aktualizace herního stavu ---
         if current_game_state == GAME_STATE_INTRO:
             if pygame.time.get_ticks() - intro_start_time > 3000:
@@ -395,6 +442,9 @@ def main():
 
         elif current_game_state == GAME_STATE_HIGHSCORES:
             draw_highscores_screen()
+
+        elif current_game_state == GAME_STATE_PAUSED:  # Vykreslení obrazovky pauzy
+            draw_paused_screen()
 
         pygame.display.flip()
         clock.tick(FPS)

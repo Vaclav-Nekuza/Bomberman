@@ -2,6 +2,18 @@
     "highscores": [
         {
             "name": "dima",
+            "score": 260
+        },
+        {
+            "name": "dima",
+            "score": 200
+        },
+        {
+            "name": "dima2",
+            "score": 200
+        },
+        {
+            "name": "dima",
             "score": 180
         },
         {
@@ -14,15 +26,19 @@
         },
         {
             "name": "dima",
-            "score": 100
-        },
-        {
-            "name": "dijma",
-            "score": 40
+            "score": 120
         },
         {
             "name": "dima",
-            "score": 20
+            "score": 120
+        },
+        {
+            "name": "dima",
+            "score": 120
+        },
+        {
+            "name": "dima",
+            "score": 100
         }
     ]
 }
