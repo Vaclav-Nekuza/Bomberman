@@ -1,16 +1,21 @@
 import pygame
-import numpy as np # Numpy se zde sice explicitně nepoužívá, ale je dobré ho importovat, pokud je součástí projektu a závislostí.
 
 # Importování všeho potřebného z našich modulů
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, TITLE, FPS, HUD_HEIGHT,
-    WHITE, BLACK, GREEN, RED, BLUE, GRAY, BROWN, ORANGE, YELLOW, EXPLOSION_COLOR,
-    TILE_SIZE, GAME_STATE_INTRO, GAME_STATE_MENU, GAME_STATE_PLAYING,
+    WHITE, BLACK, RED, GRAY, TILE_SIZE, GAME_STATE_INTRO, GAME_STATE_MENU, GAME_STATE_PLAYING,
     GAME_STATE_GAME_OVER, GAME_STATE_HIGHSCORES,
-    TILE_EMPTY, TILE_WALL, TILE_BREAKABLE, TILE_PLAYER_START, TILE_EXIT, TILE_COLLECTIBLE
+    TILE_WALL, TILE_BREAKABLE, TILE_PLAYER_START, TILE_EXIT, TILE_COLLECTIBLE
 )
-from sprites import Player, Wall, DemolitionCharge, Explosion, Exit, Collectible
-from utils import load_highscores, save_highscores, generate_map, Button
+from entity.game_entity.Collectible import Collectible
+from entity.game_entity.Player import Player
+from entity.game_entity.Exit import Exit
+from entity.game_entity.Explosion import Explosion
+from entity.game_entity.Wall import Wall
+from entity.game_entity.DomolitionCharge import DemolitionCharge
+from utils import load_highscores, save_highscores, generate_map
+from entity.ui_entity.Button import Button
+
 
 # --- Hlavní herní smyčka ---
 def main():
