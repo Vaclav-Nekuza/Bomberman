@@ -9,7 +9,7 @@ from config import (
     MEDIUM_GAME, HARD_GAME, GAME_STATE_HINT
 )
 from entity.game_entity.Collectible import Collectible
-from entity.game_entity.DomolitionCharge import DemolitionCharge
+from entity.game_entity.DemolitionCharge import DemolitionCharge
 from entity.game_entity.Exit import Exit
 from entity.game_entity.Explosion import Explosion
 from entity.game_entity.Player import Player
