@@ -1,14 +1,18 @@
 import pygame
-
 from config import TILE_SIZE, BLUE
 
 # --- Třída Hráče ---
-
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface([TILE_SIZE - 4, TILE_SIZE - 4])
-        self.image.fill(BLUE)
+        # --- Načtení obrázku hráče ---
+        try:
+            original_image = pygame.image.load("images/player_character.png").convert_alpha()
+            self.image = pygame.transform.scale(original_image, (TILE_SIZE - 4, TILE_SIZE - 4))
+        except pygame.error as e:
+            print(f"Chyba při načítání obrázku hráče: {e}. Používám fallback modrou kostku.")
+            self.image = pygame.Surface([TILE_SIZE - 4, TILE_SIZE - 4])
+            self.image.fill(BLUE)
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
         self.speed = 4
