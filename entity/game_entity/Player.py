@@ -60,7 +60,7 @@ class Player(pygame.sprite.Sprite):
         self.handle_collision(breakable_walls, 0, dy)
 
     def handle_collision(self, walls_group, dx, dy):
-        distance = 8
+        distance = 10
         skip = 1
         for wall in walls_group:
             if self.rect.colliderect(wall.rect):
