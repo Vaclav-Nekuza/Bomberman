@@ -3,7 +3,7 @@ from config import TILE_SIZE, BLUE
 
 # --- Třída Hráče ---
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y,bombAmount):
         super().__init__()
         # --- Načtení obrázku hráče ---
         try:
@@ -16,7 +16,7 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
         self.speed = 4
-        self.demolition_charges = 3
+        self.demolition_charges = bombAmount
         self.lives = 3
         self.invincible = False
         self.invincible_timer = 0
