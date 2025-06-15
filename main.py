@@ -19,14 +19,22 @@ from screen.HardnessSelectScreen import HardnessSelect
 from utils import load_highscores, save_highscores, generate_map
 
 
-# --- Hlavní herní smyčka ---
+# Hlavní herní smyčka
 def main():
+
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption(TITLE)
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 36)
     hud_font = pygame.font.Font(None, 40)
+
+    background_image = None
+    try:
+        loaded_image = pygame.image.load("images/background.png").convert()
+        background_image = pygame.transform.scale(loaded_image, (SCREEN_WIDTH, SCREEN_HEIGHT - HUD_HEIGHT))
+    except pygame.error as e:
+        print(f"Chyba při načítání obrázku pozadí: {e}. Pozadí bude bílé.")
 
     current_game_state = GAME_STATE_INTRO
     intro_start_time = pygame.time.get_ticks()
@@ -148,11 +156,9 @@ def main():
         back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         screen.blit(back_text, back_rect)
 
-    def draw_paused_screen():  # NOVÁ FUNKCE PRO PAUZU
-        # Zatemnění obrazovky - nejprve vykreslíme celou hru (což je uděláno před voláním draw_paused_screen),
-        # a pak přes ní nakreslíme průhlednou vrstvu.
+    def draw_paused_screen():
         s = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        s.fill((0, 0, 0, 128))  # Černá s 128 průhledností (z 255)
+        s.fill((0, 0, 0, 128))
         screen.blit(s, (0, 0))
 
         pause_text = font.render("PAUZA", True, WHITE)
@@ -164,8 +170,7 @@ def main():
         restart_game_pause.draw(screen)
         quit_game_pause.draw(screen)
 
-    # ... (Zde budou pokračovat definice funkcí, nebo hlavní herní smyčka) ...
-    running = True  # To je jen orientační, že začíná hlavní smyčka
+    running = True
 
     def initialize_game_level(time_in_seconds,bombs):
         nonlocal player, score, game_timer, start_game_time, finish_time, message, message_timer, player_name_input, asking_for_name, remaining_time_seconds, last_unpaused_time
@@ -221,7 +226,6 @@ def main():
 
         start_game_time = pygame.time.get_ticks()
 
-    # LeveĺScreenSelectWindow
     hardness_selector = HardnessSelect(screen, font, initialize_game_level)
     running = True
     while running:
@@ -452,7 +456,12 @@ def main():
                 message = f"+{item.value} Bodů!"
                 message_timer = pygame.time.get_ticks() + 1000
 
-            screen.fill(WHITE)
+            # Vykreslení pozadí
+            if background_image:
+                screen.blit(background_image, (0, HUD_HEIGHT))
+            else:
+                screen.fill(WHITE) # Původní bílé pozadí jako fallback
+
             pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, HUD_HEIGHT))
             all_sprites.draw(screen)
 
