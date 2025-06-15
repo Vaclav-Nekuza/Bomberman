@@ -60,17 +60,35 @@ class Player(pygame.sprite.Sprite):
         self.handle_collision(breakable_walls, 0, dy)
 
     def handle_collision(self, walls_group, dx, dy):
+        distance = 10
+        skip = 1
         for wall in walls_group:
             if self.rect.colliderect(wall.rect):
                 if dx > 0:
                     self.rect.right = wall.rect.left
+                    if abs(self.rect.bottom - wall.rect.top) < distance:
+                        self.rect.y -= skip
+                    elif abs(self.rect.top - wall.rect.bottom) < distance:
+                        self.rect.y += skip
                 elif dx < 0:
                     self.rect.left = wall.rect.right
+                    if abs(self.rect.bottom - wall.rect.top) < distance:
+                        self.rect.y -= skip
+                    elif abs(self.rect.top - wall.rect.bottom) < distance:
+                        self.rect.y += skip
 
                 if dy > 0:
                     self.rect.bottom = wall.rect.top
+                    if abs(self.rect.right - wall.rect.left) < distance:
+                        self.rect.x -= skip
+                    elif abs(self.rect.left - wall.rect.right) < distance:
+                        self.rect.x += skip
                 elif dy < 0:
                     self.rect.top = wall.rect.bottom
+                    if abs(self.rect.right - wall.rect.left) < distance:
+                        self.rect.x -= skip
+                    elif abs(self.rect.left - wall.rect.right) < distance:
+                        self.rect.x += skip
 
     def take_damage(self):
         if not self.invincible:

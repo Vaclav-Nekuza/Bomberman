@@ -1,7 +1,15 @@
 {
     "highscores": [
         {
+            "name": "vasek",
+            "score": 300
+        },
+        {
             "name": "dima",
+            "score": 260
+        },
+        {
+            "name": "vasek2",
             "score": 260
         },
         {
@@ -30,14 +38,6 @@
         },
         {
             "name": "Dima",
-            "score": 140
-        },
-        {
-            "name": "dima",
-            "score": 140
-        },
-        {
-            "name": "dima",
             "score": 140
         }
     ]
