@@ -1,1 +1,1 @@
-# Bomberman
+# Maze Runner
