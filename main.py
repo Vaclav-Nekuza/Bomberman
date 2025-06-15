@@ -244,7 +244,6 @@ def main():
                 action = play_button.handle_event(event)
                 if action == GAME_STATE_HARDNESS_CHOOSE:
                     current_game_state = action
-                    # initialize_game_level()
                     hardness_selector.DrawHardnessScreen()
 
                 action_highscores = highscores_button.handle_event(event)
@@ -358,7 +357,7 @@ def main():
                 action_restart_pause = restart_game_pause.handle_event(event)
                 if action_restart_pause == GAME_STATE_PLAYING:
                     current_game_state = action_restart_pause
-                    initialize_game_level()  # Inicializuje novou hru
+                    hardness_selector.InitByLastGame()  # Inicializuje novou hru
 
                 action_quit_game = quit_game_pause.handle_event(event)
                 if action_quit_game == GAME_STATE_MENU:
