@@ -20,503 +20,514 @@ from screen.HintScreen import HintScreen
 from utils import load_highscores, save_highscores, generate_map
 
 
-# Hlavní herní smyčka
-def main():
+class Game:
+    """
+    Třída zapouzdřující veškerou herní logiku a stav.
+    """
 
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption(TITLE)
-    clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 36)
-    hud_font = pygame.font.Font(None, 40)
+    def __init__(self):
+        """
+        Inicializuje Pygame, herní okno, fonty, a všechny herní proměnné.
+        """
+        pygame.init()
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption(TITLE)
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(None, 36)
+        self.hud_font = pygame.font.Font(None, 40)
+        self.running = True
+        self.current_game_state = GAME_STATE_INTRO
+        self.intro_start_time = pygame.time.get_ticks()
 
-    background_image = None
-    try:
-        loaded_image = pygame.image.load("images/background.png").convert()
-        background_image = pygame.transform.scale(loaded_image, (SCREEN_WIDTH, SCREEN_HEIGHT - HUD_HEIGHT))
-    except pygame.error as e:
-        print(f"Chyba při načítání obrázku pozadí: {e}. Pozadí bude bílé.")
+        self._load_assets()
+        self._initialize_game_variables()
+        self._create_ui_elements()
 
-    current_game_state = GAME_STATE_INTRO
-    intro_start_time = pygame.time.get_ticks()
+    def _load_assets(self):
+        """
+        Načte herní assety, jako jsou obrázky a zvuky.
+        """
+        try:
+            loaded_image = pygame.image.load("images/background.png").convert()
+            self.background_image = pygame.transform.scale(loaded_image, (SCREEN_WIDTH, SCREEN_HEIGHT - HUD_HEIGHT))
+        except pygame.error as e:
+            print(f"Chyba při načítání obrázku pozadí: {e}. Pozadí bude bílé.")
+            self.background_image = None
 
-    hintScreen = HintScreen(screen,font)
+    def _initialize_game_variables(self):
+        """
+        Inicializuje nebo resetuje proměnné pro novou hru.
+        """
+        self.player = None
+        self.all_sprites = pygame.sprite.Group()
+        self.solid_walls = pygame.sprite.Group()
+        self.breakable_walls = pygame.sprite.Group()
+        self.demolition_charges = pygame.sprite.Group()
+        self.explosions = pygame.sprite.Group()
+        self.exits = pygame.sprite.Group()
+        self.collectibles = pygame.sprite.Group()
 
-    player = None
-    all_sprites = pygame.sprite.Group()
-    solid_walls = pygame.sprite.Group()
-    breakable_walls = pygame.sprite.Group()
-    demolition_charges = pygame.sprite.Group()
-    explosions = pygame.sprite.Group()
-    exits = pygame.sprite.Group()
-    collectibles = pygame.sprite.Group()
-
-    score = 0
-    game_timer = 120
-    start_game_time = 0
-    finish_time = 0
-    message = ""
-    message_timer = 0
-    player_name_input = ""
-    asking_for_name = False
-    LAST_GAME_VARIANT = None
-
-    remaining_time_seconds = 0
-    last_unpaused_time = pygame.time.get_ticks()
-
-
-
-    # Tlačítka pro menu
-    play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60, 200, 70, "HRÁT", GAME_STATE_HARDNESS_CHOOSE)
-    highscores_button = Button(SCREEN_WIDTH // 2 - 290, SCREEN_HEIGHT // 2 + 20, 540, 70, "NEJLEPŠÍ VÝSLEDKY",
-                               GAME_STATE_HIGHSCORES)
-    hint_button = Button(SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 + 100, 340, 70, "NÁPOVĚDA", GAME_STATE_HINT)
-    quit_button = Button(SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 + 200, 280, 70, "UKONČIT", pygame.QUIT)
-
-    # Tlačítka pro obrazovku GAME OVER
-    restart_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 100, 200, 70, "RESTART",
-                                      GAME_STATE_PLAYING, font_size=50)
-    menu_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 180, 200, 70, "MENU", GAME_STATE_MENU,
-                                   font_size=50)
-
-    # Tlačítka pro PAUSE menu
-    resume_button_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 - 40, 350, 70, "POKRAČOVAT",
-                                 GAME_STATE_PLAYING, font_size=50)
-    restart_game_pause = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 40, 200, 70, "RESTART",
-                                GAME_STATE_PLAYING, font_size=50)
-    quit_game_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 + 120, 350, 70, "UKONČIT HRU", GAME_STATE_MENU,
-                             font_size=50)
-
-    def draw_intro_screen():
-        screen.fill(BLACK)
-        intro_text = font.render(TITLE, True, WHITE)
-        text_rect = intro_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-        screen.blit(intro_text, text_rect)
-        subtitle_text = font.render("Proklestěte si cestu k cíli!", True, GRAY)
-        subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20))
-        screen.blit(subtitle_text, subtitle_rect)
-
-    def draw_menu_screen():
-        screen.fill(BLACK)
-        menu_text = font.render("MENU", True, WHITE)
-        text_rect = menu_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
-        screen.blit(menu_text, text_rect)
-        play_button.draw(screen)
-        highscores_button.draw(screen)
-        hint_button.draw(screen)
-        quit_button.draw(screen)
-
-    def draw_game_over_screen():
-        nonlocal player_name_input, asking_for_name
-        screen.fill(BLACK)
-        game_over_text = font.render("KONEC HRY!", True, WHITE)
-        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
-        screen.blit(game_over_text, text_rect)
-
-        score_text = font.render(f"Vaše skóre: {score}", True, WHITE)
-        score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-        screen.blit(score_text, score_rect)
-
-        if finish_time > 0 and (player.lives > 0 and (finish_time - start_game_time) // 1000 < game_timer):
-            time_taken = (finish_time - start_game_time) // 1000
-            time_text = font.render(f"Čas dokončení: {time_taken}s", True, WHITE)
-            time_rect = time_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-            screen.blit(time_text, time_rect)
-        else:
-            time_text = font.render("Čas vypršel!" if player.lives > 0 else "Životy vypršely!", True, RED)
-            time_rect = time_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-            screen.blit(time_text, time_rect)
-
-        if asking_for_name:
-            name_prompt = font.render(f"Zadejte své jméno: {player_name_input}_", True, WHITE)
-            name_prompt_rect = name_prompt.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
-            screen.blit(name_prompt, name_prompt_rect)
-        else:
-            restart_button_game_over.draw(screen)
-            menu_button_game_over.draw(screen)
-
-            esc_text = font.render("ESC pro ukončení", True, GRAY)
-            esc_rect = esc_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 270))
-            screen.blit(esc_text, esc_rect)
-
-    def draw_highscores_screen():
-        screen.fill(BLACK)
-        title_text = font.render("NEJLEPŠÍ VÝSLEDKY", True, WHITE)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
-        screen.blit(title_text, title_rect)
-
-        scores_list = load_highscores()
-        if scores_list:
-            for i, entry in enumerate(scores_list):
-                player_name = entry.get('name', 'Neznámý')
-                player_score = entry.get('score', 0)
-                score_line = f"{i + 1}. {player_name} - {player_score}"
-                score_text = hud_font.render(score_line, True, WHITE)
-                screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, 120 + i * 40))
-        else:
-            no_scores_text = hud_font.render("Zatím nejsou žádné výsledky.", True, GRAY)
-            screen.blit(no_scores_text, (SCREEN_WIDTH // 2 - no_scores_text.get_width() // 2, SCREEN_HEIGHT // 2))
-
-        back_text = font.render("Stiskněte 'ESC' pro návrat do menu", True, GRAY)
-        back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
-        screen.blit(back_text, back_rect)
-
-    def draw_paused_screen():
-        s = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        s.fill((0, 0, 0, 128))
-        screen.blit(s, (0, 0))
-
-        pause_text = font.render("PAUZA", True, WHITE)
-        pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
-        screen.blit(pause_text, pause_rect)
-
-        # Vykreslení tlačítek pauzy
-        resume_button_pause.draw(screen)
-        restart_game_pause.draw(screen)
-        quit_game_pause.draw(screen)
-
-    running = True
-
-    def initialize_game_level(time_in_seconds,bombs):
-        nonlocal player, score, game_timer, start_game_time, finish_time, message, message_timer, player_name_input, asking_for_name, remaining_time_seconds, last_unpaused_time
-        all_sprites.empty()
-        solid_walls.empty()
-        breakable_walls.empty()
-        demolition_charges.empty()
-        explosions.empty()
-        exits.empty()
-        collectibles.empty()
-        score = 0
-        game_timer = time_in_seconds
-        message = ""
-        message_timer = 0
-        finish_time = 0
-        player_name_input = ""
-        asking_for_name = False
-        remaining_time_seconds = game_timer
+        self.score = 0
+        self.game_timer = 120
+        self.start_game_time = 0
+        self.finish_time = 0
+        self.message = ""
+        self.message_timer = 0
+        self.player_name_input = ""
+        self.asking_for_name = False
+        self.remaining_time_seconds = 0
+        self.last_unpaused_time = 0
         pygame.key.set_repeat(0)
+
+    def _create_ui_elements(self):
+        """
+        Vytvoří všechny UI prvky, jako jsou tlačítka a obrazovky.
+        """
+        # Společné obrazovky a selektory
+        self.hint_screen = HintScreen(self.screen, self.font)
+        self.hardness_selector = HardnessSelect(self.screen, self.font, self._initialize_game_level)
+
+        # Tlačítka pro menu
+        self.play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60, 200, 70, "HRÁT",
+                                  GAME_STATE_HARDNESS_CHOOSE)
+        self.highscores_button = Button(SCREEN_WIDTH // 2 - 290, SCREEN_HEIGHT // 2 + 20, 540, 70, "NEJLEPŠÍ VÝSLEDKY",
+                                        GAME_STATE_HIGHSCORES)
+        self.hint_button = Button(SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 + 100, 340, 70, "NÁPOVĚDA",
+                                  GAME_STATE_HINT)
+        self.quit_button = Button(SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 + 200, 280, 70, "UKONČIT", pygame.QUIT)
+
+        # Tlačítka pro obrazovku GAME OVER
+        self.restart_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 100, 200, 70, "RESTART",
+                                               GAME_STATE_PLAYING, font_size=50)
+        self.menu_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 180, 200, 70, "MENU",
+                                            GAME_STATE_MENU, font_size=50)
+
+        # Tlačítka pro PAUSE menu
+        self.resume_button_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 - 40, 350, 70, "POKRAČOVAT",
+                                          GAME_STATE_PLAYING, font_size=50)
+        self.restart_game_pause = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 40, 200, 70, "RESTART",
+                                         GAME_STATE_PLAYING, font_size=50)
+        self.quit_game_pause = Button(SCREEN_WIDTH // 2 - 175, SCREEN_HEIGHT // 2 + 120, 350, 70, "UKONČIT HRU",
+                                      GAME_STATE_MENU, font_size=50)
+
+    def _initialize_game_level(self, time_in_seconds, bombs):
+        """
+        Nastaví herní mapu, hráče a všechny herní entity pro novou úroveň.
+        """
+        self._initialize_game_variables()
+        self.game_timer = time_in_seconds
+        self.remaining_time_seconds = self.game_timer
 
         map_width_tiles = SCREEN_WIDTH // TILE_SIZE
         map_height_tiles = (SCREEN_HEIGHT - HUD_HEIGHT) // TILE_SIZE
         game_map_array = generate_map(map_width_tiles, map_height_tiles)
-        start_game_time = pygame.time.get_ticks()
-        last_unpaused_time = pygame.time.get_ticks()
 
         player_start_pos = (0, 0)
 
         for y in range(map_height_tiles):
             for x in range(map_width_tiles):
                 tile_type = game_map_array[y, x]
+                pos_x, pos_y = x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT
                 if tile_type == TILE_WALL:
-                    wall = Wall(x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT, TILE_WALL)
-                    solid_walls.add(wall)
-                    all_sprites.add(wall)
+                    wall = Wall(pos_x, pos_y, TILE_WALL)
+                    self.solid_walls.add(wall)
+                    self.all_sprites.add(wall)
                 elif tile_type == TILE_BREAKABLE:
-                    breakable_wall = Wall(x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT, TILE_BREAKABLE)
-                    breakable_walls.add(breakable_wall)
-                    all_sprites.add(breakable_wall)
+                    breakable_wall = Wall(pos_x, pos_y, TILE_BREAKABLE)
+                    self.breakable_walls.add(breakable_wall)
+                    self.all_sprites.add(breakable_wall)
                 elif tile_type == TILE_PLAYER_START:
-                    player_start_pos = (x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT)
+                    player_start_pos = (pos_x, pos_y)
                 elif tile_type == TILE_EXIT:
-                    exit_tile = Exit(x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT)
-                    exits.add(exit_tile)
-                    all_sprites.add(exit_tile)
+                    exit_tile = Exit(pos_x, pos_y)
+                    self.exits.add(exit_tile)
+                    self.all_sprites.add(exit_tile)
                 elif tile_type == TILE_COLLECTIBLE:
-                    collectible = Collectible(x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT, 20)
-                    collectibles.add(collectible)
-                    all_sprites.add(collectible)
+                    collectible = Collectible(pos_x, pos_y, 20)
+                    self.collectibles.add(collectible)
+                    self.all_sprites.add(collectible)
 
-        player = Player(player_start_pos[0], player_start_pos[1],bombs)
-        all_sprites.add(player)
+        self.player = Player(player_start_pos[0], player_start_pos[1], bombs)
+        self.all_sprites.add(self.player)
 
-        start_game_time = pygame.time.get_ticks()
+        self.start_game_time = pygame.time.get_ticks()
+        self.last_unpaused_time = self.start_game_time
 
-    hardness_selector = HardnessSelect(screen, font, initialize_game_level)
-    running = True
-    while running:
+    def run(self):
+        """
+        Hlavní herní smyčka.
+        """
+        while self.running:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
+        pygame.quit()
+
+    def handle_events(self):
+        """
+        Zpracovává všechny uživatelské vstupy a události.
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                self.running = False
 
-            if current_game_state == GAME_STATE_INTRO:
-                pass
-            elif current_game_state == GAME_STATE_MENU:
-                action = play_button.handle_event(event)
-                if action == GAME_STATE_HARDNESS_CHOOSE:
-                    current_game_state = action
-                    # initialize_game_level()
-                    hardness_selector.DrawHardnessScreen()
+            # Zpracování událostí podle aktuálního stavu hry
+            if self.current_game_state == GAME_STATE_MENU:
+                self._handle_menu_events(event)
+            elif self.current_game_state == GAME_STATE_HARDNESS_CHOOSE:
+                self._handle_hardness_choose_events(event)
+            elif self.current_game_state == GAME_STATE_HINT:
+                if self.hint_screen.btn_back.handle_event(event) == GAME_STATE_MENU:
+                    self.current_game_state = GAME_STATE_MENU
+            elif self.current_game_state == GAME_STATE_PLAYING:
+                self._handle_playing_events(event)
+            elif self.current_game_state == GAME_STATE_GAME_OVER:
+                self._handle_game_over_events(event)
+            elif self.current_game_state == GAME_STATE_HIGHSCORES:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.current_game_state = GAME_STATE_MENU
+            elif self.current_game_state == GAME_STATE_PAUSED:
+                self._handle_paused_events(event)
 
-                action_highscores = highscores_button.handle_event(event)
-                if action_highscores == GAME_STATE_HIGHSCORES:
-                    current_game_state = action_highscores
+    def _handle_menu_events(self, event):
+        """Zpracování událostí v hlavním menu."""
+        if self.play_button.handle_event(event):
+            self.current_game_state = GAME_STATE_HARDNESS_CHOOSE
+        if self.highscores_button.handle_event(event):
+            self.current_game_state = GAME_STATE_HIGHSCORES
+        if self.hint_button.handle_event(event):
+            self.current_game_state = GAME_STATE_HINT
+        if self.quit_button.handle_event(event):
+            self.running = False
 
-                action_hint = hint_button.handle_event(event)
-                if action_hint == GAME_STATE_HINT:
-                    current_game_state = action_hint
-                    hintScreen.DrawHintScreen()
+    def _handle_hardness_choose_events(self, event):
+        """Zpracování událostí na obrazovce výběru obtížnosti."""
+        if self.hardness_selector.EasyLevelButton.handle_event(event) == EASY_GAME:
+            self.current_game_state = GAME_STATE_PLAYING
+            self.hardness_selector.InitEasyLevel()
+        elif self.hardness_selector.MediumLevelButton.handle_event(event) == MEDIUM_GAME:
+            self.current_game_state = GAME_STATE_PLAYING
+            self.hardness_selector.InitMediumLevel()
+        elif self.hardness_selector.HardLevelButton.handle_event(event) == HARD_GAME:
+            self.current_game_state = GAME_STATE_PLAYING
+            self.hardness_selector.InitHardLevel()
 
-                action_quit = quit_button.handle_event(event)
-                if action_quit == pygame.QUIT:
-                    running = False
+    def _handle_playing_events(self, event):
+        """Zpracování událostí během hraní."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.current_game_state = GAME_STATE_PAUSED
+                self.last_unpaused_time = pygame.time.get_ticks()
+            elif event.key == pygame.K_SPACE and self.player.demolition_charges > 0:
+                self._place_demolition_charge()
 
-            elif current_game_state == GAME_STATE_HARDNESS_CHOOSE:
+    def _place_demolition_charge(self):
+        """Položí demoliční nálož na mapu, pokud je to možné."""
+        charge_x = (self.player.rect.x + TILE_SIZE // 2) // TILE_SIZE * TILE_SIZE
+        charge_y = (self.player.rect.y + TILE_SIZE // 2 - HUD_HEIGHT) // TILE_SIZE * TILE_SIZE
+        charge_pos_world = (charge_x, charge_y + HUD_HEIGHT)
 
-                easy_game_action = hardness_selector.EasyLevelButton.handle_event(event)
-                medium_game_action = hardness_selector.MediumLevelButton.handle_event(event)
-                hard_game_action = hardness_selector.HardLevelButton.handle_event(event)
+        # Zkontroluje, zda na dané pozici již není nálož
+        can_place = not any(charge.rect.topleft == charge_pos_world for charge in self.demolition_charges)
 
+        if can_place:
+            charge = DemolitionCharge(charge_pos_world[0], charge_pos_world[1])
+            self.demolition_charges.add(charge)
+            self.all_sprites.add(charge)
+            self.player.demolition_charges -= 1
 
-                if easy_game_action == EASY_GAME:
-                    current_game_state = GAME_STATE_PLAYING
-                    hardness_selector.InitEasyLevel()
-
-                if medium_game_action == MEDIUM_GAME:
-                    current_game_state = GAME_STATE_PLAYING
-                    hardness_selector.InitMediumLevel()
-
-                if hard_game_action == HARD_GAME:
-                    current_game_state = GAME_STATE_PLAYING
-                    hardness_selector.InitHardLevel()
-
-            elif current_game_state == GAME_STATE_HINT:
-                if hintScreen.btn_back.handle_event(event) == GAME_STATE_MENU:
-                    current_game_state = GAME_STATE_MENU
-
-
-
-            elif current_game_state == GAME_STATE_PLAYING:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        current_game_state = GAME_STATE_PAUSED
-                        last_unpaused_time = pygame.time.get_ticks()
-                    if event.key == pygame.K_SPACE:
-                        charge_x = (player.rect.x + TILE_SIZE // 2) // TILE_SIZE * TILE_SIZE
-                        charge_y = (player.rect.y + TILE_SIZE // 2 - HUD_HEIGHT) // TILE_SIZE * TILE_SIZE
-
-                        charge_x_world = charge_x
-                        charge_y_world = charge_y + HUD_HEIGHT
-
-                        if player.demolition_charges > 0:
-                            can_place = True
-                            for existing_charge in demolition_charges:
-                                if existing_charge.rect.topleft == (charge_x_world, charge_y_world):
-                                    can_place = False
-                                    break
-                            if can_place:
-                                charge = DemolitionCharge(charge_x_world, charge_y_world)
-                                demolition_charges.add(charge)
-                                all_sprites.add(charge)
-                                player.demolition_charges -= 1
-            elif current_game_state == GAME_STATE_GAME_OVER:
-                if asking_for_name:
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_RETURN:
-                            if player_name_input:
-                                save_highscores({"name": player_name_input, "score": score})
-                                asking_for_name = False
-                                player_name_input = ""
-                                pygame.key.set_repeat(0)
-                        elif event.key == pygame.K_BACKSPACE:
-                            player_name_input = player_name_input[:-1]
-                        elif event.unicode.isalnum() or event.unicode == " ":
-                            if len(player_name_input) < 10:
-                                player_name_input += event.unicode
-                else:  # Pokud se jméno neptá, umožní restart/ukončení
-                    # Obsluha kláves 'R' a 'ESC'
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_r:
-                            current_game_state = GAME_STATE_PLAYING
-                            hardness_selector.InitByLastGame()
-                        elif event.key == pygame.K_ESCAPE:
-                            running = False
-
-                    # Obsluha kliku na nová tlačítka
-                    action_menu = menu_button_game_over.handle_event(event)
-                    if action_menu == GAME_STATE_MENU:
-                        current_game_state = action_menu
-
-                    action_restart_button = restart_button_game_over.handle_event(event)
-                    if action_restart_button == GAME_STATE_PLAYING:
-                        current_game_state = action_restart_button
-                        hardness_selector.InitByLastGame()
-            elif current_game_state == GAME_STATE_HIGHSCORES:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        current_game_state = GAME_STATE_MENU
-            elif current_game_state == GAME_STATE_PAUSED:  # Obsluha událostí pro PAUZA menu
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        current_game_state = GAME_STATE_PLAYING
-                        start_game_time += (pygame.time.get_ticks() - last_unpaused_time)
-                # Obsluha tlačítek v pauze
-                action_resume = resume_button_pause.handle_event(event)
-                if action_resume == GAME_STATE_PLAYING:
-                    current_game_state = action_resume
-                    start_game_time += (pygame.time.get_ticks() - last_unpaused_time)
-
-                action_restart_pause = restart_game_pause.handle_event(event)
-                if action_restart_pause == GAME_STATE_PLAYING:
-                    current_game_state = action_restart_pause
-                    initialize_game_level()  # Inicializuje novou hru
-
-                action_quit_game = quit_game_pause.handle_event(event)
-                if action_quit_game == GAME_STATE_MENU:
-                    current_game_state = action_quit_game
-        # --- Aktualizace herního stavu ---
-        if current_game_state == GAME_STATE_INTRO:
-            if pygame.time.get_ticks() - intro_start_time > 3000:
-                current_game_state = GAME_STATE_MENU
-            draw_intro_screen()
-
-        elif current_game_state == GAME_STATE_MENU:
-            draw_menu_screen()
-
-        elif current_game_state == GAME_STATE_HARDNESS_CHOOSE:
-            hardness_selector.DrawHardnessScreen()
-
-        elif current_game_state == GAME_STATE_PLAYING:
-            player.update(solid_walls, breakable_walls)
-
-            elapsed_time_ms = pygame.time.get_ticks() - start_game_time
-            remaining_time_seconds = game_timer - (elapsed_time_ms // 1000)
-            if remaining_time_seconds < 0:
-                remaining_time_seconds = 0
-
-            for charge in list(demolition_charges):
-                if not charge.exploded and pygame.time.get_ticks() >= charge.explosion_time:
-                    charge.exploded = True
-                    charge_tile_x = charge.rect.x // TILE_SIZE
-                    charge_tile_y = (charge.rect.y - HUD_HEIGHT) // TILE_SIZE
-
-                    explosion_tiles_to_create = set()
-                    tiles_to_destroy = []
-
-                    explosion_tiles_to_create.add((charge_tile_x, charge_tile_y))
-
-                    directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-                    map_width_tiles = SCREEN_WIDTH // TILE_SIZE
-                    map_height_tiles = (SCREEN_HEIGHT - HUD_HEIGHT) // TILE_SIZE
-
-                    for dir_x, dir_y in directions:
-                        for i in range(1, charge.explosion_range + 1):
-                            tx = charge_tile_x + i * dir_x
-                            ty = charge_tile_y + i * dir_y
-
-                            if not (0 <= tx < map_width_tiles and 0 <= ty < map_height_tiles):
-                                break
-
-                            current_tile_is_solid_wall = False
-                            current_tile_is_breakable_wall = False
-                            current_breakable_wall_obj = None
-
-                            for sw in solid_walls:
-                                if sw.rect.x // TILE_SIZE == tx and (sw.rect.y - HUD_HEIGHT) // TILE_SIZE == ty:
-                                    current_tile_is_solid_wall = True
-                                    break
-
-                            if current_tile_is_solid_wall:
-                                explosion_tiles_to_create.add((tx, ty))
-                                break
-
-                            for bw in breakable_walls:
-                                if bw.rect.x // TILE_SIZE == tx and (bw.rect.y - HUD_HEIGHT) // TILE_SIZE == ty:
-                                    current_tile_is_breakable_wall = True
-                                    current_breakable_wall_obj = bw
-                                    break
-
-                            if current_tile_is_breakable_wall:
-                                explosion_tiles_to_create.add((tx, ty))
-                                tiles_to_destroy.append(current_breakable_wall_obj)
-                                break
-
-                            explosion_tiles_to_create.add((tx, ty))
-
-                    for ex, ey in explosion_tiles_to_create:
-                        explosion_effect = Explosion(ex * TILE_SIZE, ey * TILE_SIZE + HUD_HEIGHT,
-                                                     charge.explosion_duration, 100)
-                        explosions.add(explosion_effect)
-                        all_sprites.add(explosion_effect)
-
-                        if player.rect.colliderect(explosion_effect.rect):
-                            player.take_damage()
-                            if player.lives <= 0:
-                                current_game_state = GAME_STATE_GAME_OVER
-
-                    for wall_to_destroy in tiles_to_destroy:
-                        breakable_walls.remove(wall_to_destroy)
-                        all_sprites.remove(wall_to_destroy)
-
-                    charge.kill()
-
-            demolition_charges.update()
-            explosions.update()
-
-            if player.lives <= 0 or remaining_time_seconds <= 0 or pygame.sprite.spritecollideany(player, exits):
-                if current_game_state == GAME_STATE_PLAYING:
-                    current_game_state = GAME_STATE_GAME_OVER
-                    if pygame.sprite.spritecollideany(player,
-                                                      exits) and remaining_time_seconds > 0 and player.lives > 0:
-                        finish_time = pygame.time.get_ticks()
-                        asking_for_name = True
-                        pygame.key.set_repeat(500, 50)
-                    else:
-                        asking_for_name = False
+    def _handle_game_over_events(self, event):
+        """Zpracování událostí na obrazovce konce hry."""
+        if self.asking_for_name:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if self.player_name_input:
+                        save_highscores({"name": self.player_name_input, "score": self.score})
+                        self.asking_for_name = False
+                        self.player_name_input = ""
                         pygame.key.set_repeat(0)
+                elif event.key == pygame.K_BACKSPACE:
+                    self.player_name_input = self.player_name_input[:-1]
+                elif len(self.player_name_input) < 10 and (event.unicode.isalnum() or event.unicode == " "):
+                    self.player_name_input += event.unicode
+        else:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    self.current_game_state = GAME_STATE_PLAYING
+                    self.hardness_selector.InitByLastGame()
+                elif event.key == pygame.K_ESCAPE:
+                    self.running = False
 
-            collected_items = pygame.sprite.spritecollide(player, collectibles, True)
-            for item in collected_items:
-                score += item.value
-                message = f"+{item.value} Bodů!"
-                message_timer = pygame.time.get_ticks() + 1000
+            if self.menu_button_game_over.handle_event(event):
+                self.current_game_state = GAME_STATE_MENU
+            if self.restart_button_game_over.handle_event(event):
+                self.current_game_state = GAME_STATE_PLAYING
+                self.hardness_selector.InitByLastGame()
 
-            # Vykreslení pozadí
-            if background_image:
-                screen.blit(background_image, (0, HUD_HEIGHT))
+    def _handle_paused_events(self, event):
+        """Zpracování událostí v pauze."""
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self._resume_game()
+
+        if self.resume_button_pause.handle_event(event):
+            self._resume_game()
+        if self.restart_game_pause.handle_event(event):
+            self.current_game_state = GAME_STATE_PLAYING
+            self.hardness_selector.InitByLastGame()  # Restart s poslední obtížností
+        if self.quit_game_pause.handle_event(event):
+            self.current_game_state = GAME_STATE_MENU
+
+    def _resume_game(self):
+        """Obnoví hru z pauzy."""
+        self.current_game_state = GAME_STATE_PLAYING
+        self.start_game_time += (pygame.time.get_ticks() - self.last_unpaused_time)
+
+    def update(self):
+        """
+        Aktualizuje stav hry na základě aktuálního herního stavu.
+        """
+        state_updaters = {
+            GAME_STATE_INTRO: self._update_intro,
+            GAME_STATE_PLAYING: self._update_playing
+        }
+        updater = state_updaters.get(self.current_game_state)
+        if updater:
+            updater()
+
+    def _update_intro(self):
+        """Aktualizace pro intro obrazovku."""
+        if pygame.time.get_ticks() - self.intro_start_time > 3000:
+            self.current_game_state = GAME_STATE_MENU
+
+    def _update_playing(self):
+        """Hlavní herní logika a aktualizace entit."""
+        self.player.update(self.solid_walls, self.breakable_walls)
+        self.demolition_charges.update()
+        self.explosions.update()
+
+        self._update_timer()
+        self._check_charge_explosions()
+        self._check_game_over_conditions()
+        self._check_collectibles()
+
+    def _update_timer(self):
+        """Aktualizuje herní časovač."""
+        elapsed_time_ms = pygame.time.get_ticks() - self.start_game_time
+        self.remaining_time_seconds = self.game_timer - (elapsed_time_ms // 1000)
+        if self.remaining_time_seconds < 0:
+            self.remaining_time_seconds = 0
+
+    def _check_charge_explosions(self):
+        """Kontroluje a zpracovává výbuchy náloží."""
+        for charge in list(self.demolition_charges):
+            if not charge.exploded and pygame.time.get_ticks() >= charge.explosion_time:
+                self._trigger_explosion(charge)
+                charge.kill()
+
+    def _trigger_explosion(self, charge):
+        """Spustí výbuch a jeho efekty na okolí."""
+        charge.exploded = True
+        charge_tile_x = charge.rect.x // TILE_SIZE
+        charge_tile_y = (charge.rect.y - HUD_HEIGHT) // TILE_SIZE
+
+        explosion_tiles = self._calculate_explosion_tiles(charge_tile_x, charge_tile_y, charge.explosion_range)
+
+        # Vytvoření vizuálních efektů exploze
+        for ex, ey in explosion_tiles:
+            explosion_effect = Explosion(ex * TILE_SIZE, ey * TILE_SIZE + HUD_HEIGHT, charge.explosion_duration, 100)
+            self.explosions.add(explosion_effect)
+            self.all_sprites.add(explosion_effect)
+            # Kontrola kolize s hráčem
+            if self.player.rect.colliderect(explosion_effect.rect):
+                self.player.take_damage()
+
+    def _calculate_explosion_tiles(self, start_x, start_y, aoe_range):
+        """Vypočítá dlaždice zasažené výbuchem a zničí zdi."""
+        explosion_tiles = {(start_x, start_y)}
+        map_width_tiles = SCREEN_WIDTH // TILE_SIZE
+        map_height_tiles = (SCREEN_HEIGHT - HUD_HEIGHT) // TILE_SIZE
+
+        for dir_x, dir_y in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            for i in range(1, aoe_range + 1):
+                tx, ty = start_x + i * dir_x, start_y + i * dir_y
+                if not (0 <= tx < map_width_tiles and 0 <= ty < map_height_tiles):
+                    break
+
+                # Kolize s pevnou zdí
+                if any(w.rect.x // TILE_SIZE == tx and (w.rect.y - HUD_HEIGHT) // TILE_SIZE == ty for w in
+                       self.solid_walls):
+                    explosion_tiles.add((tx, ty))
+                    break
+
+                # Kolize s rozbitnou zdí
+                breakable_wall_hit = next((w for w in self.breakable_walls if
+                                           w.rect.x // TILE_SIZE == tx and (w.rect.y - HUD_HEIGHT) // TILE_SIZE == ty),
+                                          None)
+                if breakable_wall_hit:
+                    explosion_tiles.add((tx, ty))
+                    breakable_wall_hit.kill()  # Zničí zeď
+                    break
+
+                explosion_tiles.add((tx, ty))
+        return explosion_tiles
+
+    def _check_game_over_conditions(self):
+        """Kontroluje, zda hra neskončila."""
+        player_on_exit = pygame.sprite.spritecollideany(self.player, self.exits)
+        time_up = self.remaining_time_seconds <= 0
+        no_lives = self.player.lives <= 0
+
+        if player_on_exit or time_up or no_lives:
+            self.current_game_state = GAME_STATE_GAME_OVER
+            if player_on_exit and not time_up and not no_lives:
+                self.finish_time = pygame.time.get_ticks()
+                self.asking_for_name = True
+                pygame.key.set_repeat(500, 50)
             else:
-                screen.fill(WHITE) # Původní bílé pozadí jako fallback
+                self.asking_for_name = False
+                pygame.key.set_repeat(0)
 
-            pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, HUD_HEIGHT))
-            all_sprites.draw(screen)
+    def _check_collectibles(self):
+        """Kontroluje sbírání předmětů."""
+        collected_items = pygame.sprite.spritecollide(self.player, self.collectibles, True)
+        for item in collected_items:
+            self.score += item.value
+            self.message = f"+{item.value} Bodů!"
+            self.message_timer = pygame.time.get_ticks() + 1000
 
-            score_text_surface = hud_font.render(f"Skóre: {score}", True, WHITE)
-            screen.blit(score_text_surface, (10, (HUD_HEIGHT - score_text_surface.get_height()) // 2))
+    def draw(self):
+        """
+        Vykreslí vše na obrazovku na základě aktuálního stavu hry.
+        """
+        # Slovník mapující stavy na vykreslovací funkce
+        state_drawers = {
+            GAME_STATE_INTRO: self._draw_intro,
+            GAME_STATE_MENU: self._draw_menu,
+            GAME_STATE_HARDNESS_CHOOSE: self.hardness_selector.DrawHardnessScreen,
+            GAME_STATE_HINT: self.hint_screen.DrawHintScreen,
+            GAME_STATE_PLAYING: self._draw_playing,
+            GAME_STATE_GAME_OVER: self._draw_game_over,
+            GAME_STATE_HIGHSCORES: self._draw_highscores,
+            GAME_STATE_PAUSED: self._draw_paused,
+        }
 
-            lives_text_surface = hud_font.render(f"Životy: {player.lives}", True, WHITE)
-            screen.blit(lives_text_surface, (SCREEN_WIDTH // 2 - lives_text_surface.get_width() // 2,
-                                             (HUD_HEIGHT - lives_text_surface.get_height()) // 2))
-
-            charges_text_surface = hud_font.render(f"Nálože: {player.demolition_charges}", True, WHITE)
-            screen.blit(charges_text_surface, (SCREEN_WIDTH - charges_text_surface.get_width() - 10,
-                                               (HUD_HEIGHT - charges_text_surface.get_height()) // 2))
-
-            timer_text_surface = hud_font.render(f"Čas: {max(0, remaining_time_seconds)}s", True, WHITE)
-            screen.blit(timer_text_surface,
-                        (SCREEN_WIDTH - charges_text_surface.get_width() - 10 - timer_text_surface.get_width() - 20,
-                         (HUD_HEIGHT - timer_text_surface.get_height()) // 2))
-
-            if message and pygame.time.get_ticks() < message_timer:
-                msg_surface = font.render(message, True, RED)
-                msg_rect = msg_surface.get_rect(center=(SCREEN_WIDTH // 2, HUD_HEIGHT + 20))
-                screen.blit(msg_surface, msg_rect)
-            elif pygame.time.get_ticks() >= message_timer:
-                message = ""
-
-        elif current_game_state == GAME_STATE_GAME_OVER:
-            draw_game_over_screen()
-
-        elif current_game_state == GAME_STATE_HIGHSCORES:
-            draw_highscores_screen()
-
-        elif current_game_state == GAME_STATE_PAUSED:  # Vykreslení obrazovky pauzy
-            draw_paused_screen()
+        drawer = state_drawers.get(self.current_game_state)
+        if drawer:
+            drawer()
 
         pygame.display.flip()
-        clock.tick(FPS)
 
-    pygame.quit()
+    def _draw_intro(self):
+        self.screen.fill(BLACK)
+        intro_text = self.font.render(TITLE, True, WHITE)
+        self.screen.blit(intro_text, intro_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50)))
+        subtitle_text = self.font.render("Proklestěte si cestu k cíli!", True, GRAY)
+        self.screen.blit(subtitle_text, subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)))
 
+    def _draw_menu(self):
+        self.screen.fill(BLACK)
+        menu_text = self.font.render("MENU", True, WHITE)
+        self.screen.blit(menu_text, menu_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150)))
+        self.play_button.draw(self.screen)
+        self.highscores_button.draw(self.screen)
+        self.hint_button.draw(self.screen)
+        self.quit_button.draw(self.screen)
+
+    def _draw_playing(self):
+        # Vykreslení pozadí
+        if self.background_image:
+            self.screen.blit(self.background_image, (0, HUD_HEIGHT))
+        else:
+            self.screen.fill(WHITE)
+
+        self.all_sprites.draw(self.screen)
+        self._draw_hud()
+
+        if self.message and pygame.time.get_ticks() < self.message_timer:
+            msg_surface = self.font.render(self.message, True, RED)
+            self.screen.blit(msg_surface, msg_surface.get_rect(center=(SCREEN_WIDTH // 2, HUD_HEIGHT + 20)))
+        elif pygame.time.get_ticks() >= self.message_timer:
+            self.message = ""
+
+    def _draw_hud(self):
+        """Vykreslí Head-Up Display (skóre, životy, atd.)."""
+        pygame.draw.rect(self.screen, BLACK, (0, 0, SCREEN_WIDTH, HUD_HEIGHT))
+
+        score_text = self.hud_font.render(f"Skóre: {self.score}", True, WHITE)
+        self.screen.blit(score_text, (10, (HUD_HEIGHT - score_text.get_height()) // 2))
+
+        lives_text = self.hud_font.render(f"Životy: {self.player.lives}", True, WHITE)
+        self.screen.blit(lives_text, lives_text.get_rect(centerx=SCREEN_WIDTH // 2, centery=HUD_HEIGHT // 2))
+
+        charges_text = self.hud_font.render(f"Nálože: {self.player.demolition_charges}", True, WHITE)
+        charges_rect = charges_text.get_rect(right=SCREEN_WIDTH - 10, centery=HUD_HEIGHT // 2)
+        self.screen.blit(charges_text, charges_rect)
+
+        timer_text = self.hud_font.render(f"Čas: {max(0, self.remaining_time_seconds)}s", True, WHITE)
+        timer_rect = timer_text.get_rect(right=charges_rect.left - 20, centery=HUD_HEIGHT // 2)
+        self.screen.blit(timer_text, timer_rect)
+
+    def _draw_game_over(self):
+        self.screen.fill(BLACK)
+        game_over_text = self.font.render("KONEC HRY!", True, WHITE)
+        self.screen.blit(game_over_text, game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100)))
+
+        score_text = self.font.render(f"Vaše skóre: {self.score}", True, WHITE)
+        self.screen.blit(score_text, score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50)))
+
+        if self.finish_time > 0 and (
+                self.player.lives > 0 and (self.finish_time - self.start_game_time) // 1000 < self.game_timer):
+            time_taken = (self.finish_time - self.start_game_time) // 1000
+            time_text = self.font.render(f"Čas dokončení: {time_taken}s", True, WHITE)
+        else:
+            reason = "Čas vypršel!" if self.player.lives > 0 else "Životy vypršely!"
+            time_text = self.font.render(reason, True, RED)
+        self.screen.blit(time_text, time_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)))
+
+        if self.asking_for_name:
+            name_prompt = self.font.render(f"Zadejte své jméno: {self.player_name_input}_", True, WHITE)
+            self.screen.blit(name_prompt, name_prompt.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)))
+        else:
+            self.restart_button_game_over.draw(self.screen)
+            self.menu_button_game_over.draw(self.screen)
+            esc_text = self.font.render("ESC pro ukončení", True, GRAY)
+            self.screen.blit(esc_text, esc_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 270)))
+
+    def _draw_highscores(self):
+        self.screen.fill(BLACK)
+        title_text = self.font.render("NEJLEPŠÍ VÝSLEDKY", True, WHITE)
+        self.screen.blit(title_text, title_text.get_rect(center=(SCREEN_WIDTH // 2, 50)))
+
+        scores_list = load_highscores()
+        if scores_list:
+            for i, entry in enumerate(scores_list):
+                line = f"{i + 1}. {entry.get('name', 'N/A')} - {entry.get('score', 0)}"
+                score_text = self.hud_font.render(line, True, WHITE)
+                self.screen.blit(score_text, score_text.get_rect(centerx=SCREEN_WIDTH // 2, y=120 + i * 40))
+        else:
+            no_scores_text = self.hud_font.render("Zatím nejsou žádné výsledky.", True, GRAY)
+            self.screen.blit(no_scores_text, no_scores_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)))
+
+        back_text = self.font.render("Stiskněte 'ESC' pro návrat do menu", True, GRAY)
+        self.screen.blit(back_text, back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)))
+
+    def _draw_paused(self):
+        # Nejdříve vykreslíme herní scénu, abychom ji měli pod pauzou
+        self._draw_playing()
+        # Přidáme ztmavující vrstvu
+        s = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 128))
+        self.screen.blit(s, (0, 0))
+
+        pause_text = self.font.render("PAUZA", True, WHITE)
+        self.screen.blit(pause_text, pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150)))
+
+        self.resume_button_pause.draw(self.screen)
+        self.restart_game_pause.draw(self.screen)
+        self.quit_game_pause.draw(self.screen)
 
 
 if __name__ == "__main__":
-    main()
+    game = Game()
+    game.run()
