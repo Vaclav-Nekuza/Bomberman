@@ -6,7 +6,7 @@ from config import (
     WHITE, BLACK, RED, GRAY, TILE_SIZE, GAME_STATE_INTRO, GAME_STATE_MENU, GAME_STATE_PLAYING,
     GAME_STATE_GAME_OVER, GAME_STATE_HIGHSCORES, GAME_STATE_PAUSED,
     TILE_WALL, TILE_BREAKABLE, TILE_PLAYER_START, TILE_EXIT, TILE_COLLECTIBLE, GAME_STATE_HARDNESS_CHOOSE, EASY_GAME,
-    MEDIUM_GAME, HARD_GAME
+    MEDIUM_GAME, HARD_GAME, GAME_STATE_HINT
 )
 from entity.game_entity.Collectible import Collectible
 from entity.game_entity.DomolitionCharge import DemolitionCharge
@@ -16,6 +16,7 @@ from entity.game_entity.Player import Player
 from entity.game_entity.Wall import Wall
 from entity.ui_entity.Button import Button
 from screen.HardnessSelectScreen import HardnessSelect
+from screen.HintScreen import HintScreen
 from utils import load_highscores, save_highscores, generate_map
 
 
@@ -38,6 +39,8 @@ def main():
 
     current_game_state = GAME_STATE_INTRO
     intro_start_time = pygame.time.get_ticks()
+
+    hintScreen = HintScreen(screen,font)
 
     player = None
     all_sprites = pygame.sprite.Group()
@@ -64,10 +67,11 @@ def main():
 
 
     # Tlačítka pro menu
-    play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 40, 200, 70, "HRÁT", GAME_STATE_HARDNESS_CHOOSE)
-    highscores_button = Button(SCREEN_WIDTH // 2 - 290, SCREEN_HEIGHT // 2 + 40, 540, 70, "NEJLEPŠÍ VÝSLEDKY",
+    play_button = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60, 200, 70, "HRÁT", GAME_STATE_HARDNESS_CHOOSE)
+    highscores_button = Button(SCREEN_WIDTH // 2 - 290, SCREEN_HEIGHT // 2 + 20, 540, 70, "NEJLEPŠÍ VÝSLEDKY",
                                GAME_STATE_HIGHSCORES)
-    quit_button = Button(SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 + 120, 280, 70, "UKONČIT", pygame.QUIT)
+    hint_button = Button(SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 + 100, 340, 70, "NÁPOVĚDA", GAME_STATE_HINT)
+    quit_button = Button(SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 + 200, 280, 70, "UKONČIT", pygame.QUIT)
 
     # Tlačítka pro obrazovku GAME OVER
     restart_button_game_over = Button(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 100, 200, 70, "RESTART",
@@ -99,6 +103,7 @@ def main():
         screen.blit(menu_text, text_rect)
         play_button.draw(screen)
         highscores_button.draw(screen)
+        hint_button.draw(screen)
         quit_button.draw(screen)
 
     def draw_game_over_screen():
@@ -246,9 +251,15 @@ def main():
                 if action_highscores == GAME_STATE_HIGHSCORES:
                     current_game_state = action_highscores
 
+                action_hint = hint_button.handle_event(event)
+                if action_hint == GAME_STATE_HINT:
+                    current_game_state = action_hint
+                    hintScreen.DrawHintScreen()
+
                 action_quit = quit_button.handle_event(event)
                 if action_quit == pygame.QUIT:
                     running = False
+
             elif current_game_state == GAME_STATE_HARDNESS_CHOOSE:
 
                 easy_game_action = hardness_selector.EasyLevelButton.handle_event(event)
@@ -268,6 +279,9 @@ def main():
                     current_game_state = GAME_STATE_PLAYING
                     hardness_selector.InitHardLevel()
 
+            elif current_game_state == GAME_STATE_HINT:
+                if hintScreen.btn_back.handle_event(event) == GAME_STATE_MENU:
+                    current_game_state = GAME_STATE_MENU
 
 
 
